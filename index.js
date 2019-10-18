@@ -1,7 +1,7 @@
 CLASSES = {
-  0: 'class0',
-  1: 'class1',
-  2: 'class2',
+  0: 'Alma Mater',
+  1: 'Butler Library',
+  2: 'Lion Statue',
   3: 'class3',
   4: 'class4',
 };
