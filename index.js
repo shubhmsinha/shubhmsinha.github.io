@@ -1,7 +1,7 @@
 CLASSES = {
-  0: 'Alma Mater',
-  1: 'Butler Library',
-  2: 'Lion Statue',
+  0: 'class0',
+  1: 'class1',
+  2: 'class2',
   3: 'class3',
   4: 'class4',
 };
@@ -26,7 +26,7 @@ const demo = async () => {
   status('');
 
   // Make a prediction through the locally hosted cat.jpg.
-  const catElement = document.getElementById('lion');
+  const catElement = document.getElementById('cat');
   if (catElement.complete && catElement.naturalHeight !== 0) {
     predict(catElement);
     catElement.style.display = '';
