@@ -4,8 +4,8 @@ A mobile-first wedding menu voting site hosted at `/rajbagh-menu-preview/`.
 
 ## Deployment status
 - Website code, audited menu bank and SQL setup are committed here.
-- **Not yet connected to a live database.** Until `config.js` has real public project values and `setup.sql` has been run, the site is a **local-device demonstration**. Votes do not sync between phones.
-- Never share the voting link with guests until a two-account database privacy test passes.
+- **Connected to Supabase:** Isolated project `jffwfxyxakqvfecosorq`, schema installed (412 options, 49 limits), and `config.js` contains the publishable browser key. Guest sign-in and organizer onboarding require final dashboard steps and end-to-end validation.
+- Do not share with guests until anonymous sign-ins are enabled in Supabase Auth and the guest-vs-organizer login and privacy flow has been tested.
 
 ## Supabase setup (new project)
 1. Connect the Supabase app to ChatGPT, or create a project in the Supabase dashboard.
