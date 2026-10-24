@@ -196,7 +196,7 @@
     if(!hasBackend||state.channel)return;
     // RLS deliberately hides other users' vote rows. Poll aggregate RPCs instead of
     // subscribing to raw postgres_changes, which could disclose private records.
-    state.connection='Shared totals connected';renderTop();
+    state.connection='Live votes connected';renderTop();
     state.channel=setInterval(async()=>{
       if(state.saving||!state.ready||document.hidden)return;
       try{await fetchVotes();renderAll();}catch(e){state.connection='Sync delayed';renderTop();}
