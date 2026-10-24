@@ -3,6 +3,7 @@
 create schema if not exists private;
 revoke all on schema private from public, anon, authenticated;
 create table if not exists private.organizers(user_id uuid primary key references auth.users(id) on delete cascade);
+alter table private.organizers enable row level security;
 revoke all on private.organizers from public, anon, authenticated;
 create or replace function public.user_is_organizer()
 returns boolean language sql stable security definer set search_path='' as $$
@@ -601,3 +602,15 @@ do $$begin
 end$$;
 -- PRIVATE organizer onboarding (after creating and verifying email/password Auth user):
 -- insert into private.organizers(user_id) values ('YOUR-VERIFIED-AUTH-USER-UUID') on conflict do nothing;
+
+-- Supabase default grants can accidentally expose SECURITY DEFINER RPCs.
+-- Explicitly revoke from all implicit/public API roles, then grant only intended RPCs.
+revoke all on function public.enforce_menu_limits() from public, anon, authenticated;
+revoke all on function public.user_is_organizer() from public, anon, authenticated;
+revoke all on function public.vote_totals() from public, anon, authenticated;
+revoke all on function public.vote_participants() from public, anon, authenticated;
+revoke all on function public.organizer_reset_all_votes(text) from public, anon, authenticated;
+grant execute on function public.user_is_organizer() to authenticated;
+grant execute on function public.vote_totals() to authenticated;
+grant execute on function public.vote_participants() to authenticated;
+grant execute on function public.organizer_reset_all_votes(text) to authenticated;
