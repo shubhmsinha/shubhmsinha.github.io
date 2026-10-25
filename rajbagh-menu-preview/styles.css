@@ -58,3 +58,20 @@
 @keyframes bride-fade{from{opacity:0}to{opacity:1}}@keyframes bride-pop{from{opacity:0;transform:translateY(22px) scale(.91)}to{opacity:1;transform:translateY(0) scale(1)}}@keyframes bride-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.28)}}@keyframes bride-wink{0%,85%,100%{transform:rotate(0)}92%{transform:rotate(-15deg)}}@keyframes bride-fall{0%{transform:translate3d(0,-20px,0) rotate(0deg);opacity:0}10%{opacity:.75}85%{opacity:.55}100%{transform:translate3d(50px,470px,0) rotate(270deg);opacity:0}}
 @media(max-width:380px){.bride-surprise{padding:58px 20px 24px;min-height:395px}.bride-surprise h2{font-size:37px}}
 @media(prefers-reduced-motion:reduce){.bride-backdrop,.bride-surprise,.bride-monogram span,.bride-surprise h2 span,.bride-petal{animation:none!important}.bride-petal{opacity:0}}
+
+
+/* One optional, non-binding extra suggestion for each voteable category. */
+.extra-wish-panel{margin-top:22px;padding:18px;border:1px solid #e7d8cd;border-radius:16px;background:linear-gradient(125deg,#fff8f1,#fffdfb)}
+.extra-wish-heading{display:flex;align-items:flex-start;gap:12px;margin-bottom:15px}
+.extra-wish-icon{display:grid;place-items:center;border-radius:50%;flex:0 0 34px;width:34px;height:34px;background:#f4e2e8;color:#7d4256;font-size:22px}
+.extra-wish-heading h4{font-family:'Playfair Display',Georgia,serif;font-size:18px;margin:0 0 6px;color:#56293a}
+.extra-wish-heading p{margin:0;color:#746c73;font-size:12px;line-height:1.65}
+.extra-wish-saved{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:10px 12px;margin-bottom:11px;background:#eaf5ee;color:#2e7860;border-radius:10px;font-size:12px}
+.extra-wish-saved strong{font-weight:700}
+.extra-wish-saved button{margin-left:auto;border:0;background:transparent;color:#685265;text-decoration:underline;min-height:35px;padding:5px;cursor:pointer;font:inherit}
+.extra-wish-action label{display:block;font-size:11px;color:#746c73;font-weight:700;margin:0 0 7px}
+.extra-wish-fields{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap}
+.extra-wish-fields select{flex:2 1 170px;min-width:0;min-height:44px;border:1px solid #decbd0;border-radius:10px;background:white;padding:9px;font-size:13px;color:#403541}
+.extra-wish-fields .secondary-button{flex:1 1 145px;min-height:44px;white-space:normal}
+.organizer-pick.organizer-extra{background:#fff6e7;border-left:3px solid #c49c6b}
+@media(max-width:480px){.extra-wish-panel{padding:14px}.extra-wish-fields{flex-direction:column}.extra-wish-fields .secondary-button{flex:auto;width:100%}}
