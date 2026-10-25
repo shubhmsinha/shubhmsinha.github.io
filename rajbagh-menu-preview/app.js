@@ -179,7 +179,7 @@
     const current=state.organizerEvent||'all';
     const people=new Set([...all,...wishes].map(v=>v.user_id));
     const chips=[['all','All events'],...eventOrder.map(id=>[id,eventById[id].label])].map(([id,label])=>
-      '<button class="organizer-chip '+(current===id?'active':'')+'" data-action="organizer-event" data-id="'+id+'" aria-pressed="'+(current===id)+'">'+esc(label)+' <span>'+all.filter(v=>id==='all'||v.event_id===id).length+'</span></button>').join('');
+      '<button class="organizer-chip '+(current===id?'active':'')+'" data-action="organizer-event" data-id="'+id+'" aria-pressed="'+(current===id)+'">'+esc(label)+' <span>'+(all.filter(v=>id==='all'||v.event_id===id).length+wishes.filter(w=>id==='all'||w.event_id===id).length)+'</span></button>').join('');
     const groups=eventOrder.filter(id=>current==='all'||id===current).map(id=>{
       const rows=all.filter(v=>v.event_id===id);
       const eventWishes=wishes.filter(w=>w.event_id===id);
@@ -213,8 +213,17 @@
     const tallyHtml=topDishes.length?'<section class="organizer-tally"><h4>Dish popularity · organizer only</h4><div class="organizer-tally-list">'+topDishes.map((x,i)=>
       '<div class="organizer-tally-row"><span class="organizer-tally-rank">'+(i+1)+'</span><div class="organizer-tally-description"><strong>'+esc(itemById[x.item_id].name)+'</strong><small>'+esc(eventById[x.event_id].label)+' · '+esc(menu.sections[itemById[x.item_id].category].label)+'</small></div><span class="organizer-tally-count">'+x.primary+' pick'+(x.primary===1?'':'s')+(x.backup?' · '+x.backup+' backup':'')+'</span></div>').join('')+'</div></section>':'';
     const visibleWishes=wishes.filter(w=>current==='all'||w.event_id===current);
+    const wishCounts=new Map();
+    for(const w of visibleWishes){
+      const key=w.event_id+'|'+w.item_id;
+      if(!wishCounts.has(key))wishCounts.set(key,{event_id:w.event_id,item_id:w.item_id,count:0});
+      wishCounts.get(key).count++;
+    }
+    const wishRanking=[...wishCounts.values()].sort((a,b)=>b.count-a.count||itemById[a.item_id].name.localeCompare(itemById[b.item_id].name));
+    const wishTallyHtml=wishRanking.length?'<section class="organizer-tally"><h4>♡ Extra dish suggestions · separate from regular picks</h4><div class="organizer-tally-list">'+wishRanking.map(x=>
+      '<div class="organizer-tally-row"><span class="organizer-tally-rank">♡</span><div class="organizer-tally-description"><strong>'+esc(itemById[x.item_id].name)+'</strong><small>'+esc(eventById[x.event_id].label)+' · '+esc(menu.sections[itemById[x.item_id].category].label)+'</small></div><span class="organizer-tally-count">'+x.count+' suggestion'+(x.count===1?'':'s')+'</span></div>').join('')+'</div></section>':'';
     const currentCount=visible.length+visibleWishes.length;
-    $('selection-content').innerHTML='<section class="content-card organizer-panel"><div class="section-heading"><div><h3>Everyone’s picks</h3><p>Private organizer view · all events</p></div><span class="quota-pill">'+all.length+' total</span></div><p class="results-note">Names and individual picks are only visible to authorized organizers. Guests cannot see totals or names.</p><div class="organizer-metrics"><div><strong>'+people.size+'</strong><span>Voters</span></div><div><strong>'+all.length+'</strong><span>Total picks</span></div><div><strong>'+all.filter(v=>v.rank==='backup').length+'</strong><span>Backups</span></div></div><nav class="organizer-filter" aria-label="Filter organizer results">'+chips+'</nav>'+tallyHtml+(currentCount?groups:'<div class="no-results">No picks or extra suggestions for this event yet.</div>')+'<div class="organizer-tools"><button class="secondary-button" data-action="organizer-refresh">↻ Refresh results</button><button class="secondary-button" data-action="reset-all">Reset ALL guests’ votes</button></div></section>';
+    $('selection-content').innerHTML='<section class="content-card organizer-panel"><div class="section-heading"><div><h3>Everyone’s picks</h3><p>Private organizer view · all events</p></div><span class="quota-pill">'+all.length+' total</span></div><p class="results-note">Names and individual picks are only visible to authorized organizers. Guests cannot see totals or names.</p><div class="organizer-metrics"><div><strong>'+people.size+'</strong><span>Voters</span></div><div><strong>'+all.length+'</strong><span>Total picks</span></div><div><strong>'+all.filter(v=>v.rank==='backup').length+'</strong><span>Backups</span></div><div><strong>'+wishes.length+'</strong><span>Extra wishes</span></div></div><nav class="organizer-filter" aria-label="Filter organizer results">'+chips+'</nav>'+tallyHtml+wishTallyHtml+(currentCount?groups:'<div class="no-results">No picks or extra suggestions for this event yet.</div>')+'<div class="organizer-tools"><button class="secondary-button" data-action="organizer-refresh">↻ Refresh results</button><button class="secondary-button" data-action="reset-all">Reset ALL guests’ votes</button></div></section>';
   }
   function renderContent(){if(state.view==='browse')renderBrowse();else if(state.view==='results')renderResults();else if(state.view==='organizer')renderOrganizer();else renderMine();}
   function renderAll(){renderEventTabs();renderCategories();renderTop();renderViews();renderContent();}
