@@ -1,4 +1,3 @@
-
 /* Raj Bagh — The Menu Edit. Zero-build, phone-first static site. */
 (() => {
   'use strict';
@@ -15,7 +14,7 @@
   for (const item of menu.items) (itemsBySection[item.category] ||= []).push(item);
   const uid = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'guest-'+Date.now()+'-'+Math.random().toString(36).slice(2);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g,(m)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-  const state = { name:localStorage.getItem(keys.name)||'', userId:'', event:initialMeal, section:'breakfast_cold', view:'browse', search:'', sort:'popular', votes:[], totals:[], participants:[], organizer:false, db:null, channel:null, saving:false, active:false, connection:'', ready:false, modal:false };
+  const state = { name:localStorage.getItem(keys.name)||'', userId:'', event:initialMeal, section:'breakfast_cold', view:'browse', search:'', sort:'bank', organizerEvent:'all', votes:[], totals:[], participants:[], organizer:false, db:null, channel:null, saving:false, active:false, connection:'', ready:false, modal:false };
   let toastTimer;
   function toast(message){const x=$('toast');x.textContent=message;x.classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>x.classList.remove('visible'),3400);}
   function event(){return eventById[state.event];}
@@ -38,23 +37,26 @@
   function totalEventPicks(){return hasBackend?state.totals.filter(t=>t.event_id===state.event).reduce((n,t)=>n+Number(t.primary_count||0),0):currentVotes().filter(v=>v.rank==='primary').length;}
   function initials(name){return String(name||'?').split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase()}
   function summary(){const v=ownVotes();return {p:v.filter(x=>x.rank==='primary').length,b:v.filter(x=>x.rank==='backup').length};}
-  function sortItems(items){const xs=[...items];if(state.sort==='az')return xs.sort((a,b)=>a.name.localeCompare(b.name));return xs.sort((a,b)=>{
-    const av=voteCount(a.id), bv=voteCount(b.id);
-    return bv-av || a.name.localeCompare(b.name);
-  });}
+  function sortItems(items){
+    // Preserve the caterer's menu-bank order by default. Popularity-based
+    // sorting would leak vote rankings even when counts are hidden.
+    const xs=[...items];
+    if(state.sort==='az')xs.sort((a,b)=>a.name.localeCompare(b.name));
+    return xs;
+  }
   const iconHeart = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-9-5.7-9-12a5.1 5.1 0 0 1 9-3 5.1 5.1 0 0 1 9 3c0 6.3-9 12-9 12Z"/></svg>';
   function renderShell(){
     $('app').innerHTML = `
       <header class="app-header"><div class="container masthead">
         <div class="mast-top"><div class="brand"><div class="crest" aria-hidden="true">❧</div><div><div class="brand-name">RAJ BAGH</div><div class="brand-sub">THE WEDDING MENU EDIT</div></div></div>
           <div class="header-actions"><button class="top-button" data-action="share" aria-label="Share the voting website">↗ <span class="button-text">Share</span></button><button class="avatar-bubble" data-action="profile" aria-label="Change your name"><span id="avatar-initial">?</span></button></div></div>
-        <div class="header-copy"><div class="eyebrow">A little something for everyone</div><h1>Good food.<br><em>Great company.</em></h1><p>Your favorites, one beautiful menu. Pick what you'd love to eat, and see what everyone else is choosing as you go.</p></div>
+        <div class="header-copy"><div class="eyebrow">A little something for everyone</div><h1>Good food.<br><em>Great company.</em></h1><p>Your favorites, one beautiful menu. Pick what you'd love to eat. Everyone chooses independently—only the organizer can see the results.</p></div>
         <div class="header-bottom"><div class="live-indicator"><span class="dot ${hasBackend?'':'demo'}" id="status-dot"></span><span id="connection-label">${hasBackend?'Connecting…':'Preview mode · votes on this device only'}</span></div><div class="status-pill" id="name-pill">Welcome!</div></div>
       </div></header>
-      <div class="context-strip"><div class="container context-inner"><div class="metric-container"><div class="mini-metric"><strong id="participants-count">0</strong><span>people voted</span></div><div class="mini-metric"><strong id="total-count">0</strong><span>total picks</span></div></div><div class="disclaimer" id="top-disclaimer">Only anonymous totals are visible to other guests.</div></div></div>
+      <div class="context-strip"><div class="container context-inner"><div class="metric-container"><div class="mini-metric"><strong id="participants-count">0</strong><span>your primary picks</span></div><div class="mini-metric"><strong id="total-count">0</strong><span>your backups</span></div></div><div class="disclaimer" id="top-disclaimer">Voting is private. Other guests cannot see your selections or vote totals.</div></div></div>
       <div class="container page-content">
         <div class="section-caption">01 / Choose your event</div><nav class="meal-tabs" id="meal-tabs" aria-label="Choose a meal"></nav>
-        <div class="desktop-layout"><aside class="sidebar"><h3>Explore the menu</h3><nav class="category-list" id="desktop-categories" aria-label="Menu categories"></nav><div class="how-note">Tap a dish to vote. See anonymous vote totals alongside each option. You can change your mind any time.</div></aside>
+        <div class="desktop-layout"><aside class="sidebar"><h3>Explore the menu</h3><nav class="category-list" id="desktop-categories" aria-label="Menu categories"></nav><div class="how-note">Tap a dish to vote. Your choices stay private, and you can change your mind any time.</div></aside>
           <div class="content-panel"><div class="meal-title" id="meal-heading"></div><nav class="view-switch" id="view-switch" aria-label="Menu views"></nav><nav class="quick-picks" id="quick-picks" aria-label="Quick access to non-vegetarian choices"></nav><nav class="section-nav" id="mobile-categories" aria-label="Choose a category"></nav><div id="selection-content"></div></div>
         </div><div class="footer">Made with care for the Raj Bagh celebrations · Menu choices are subject to venue confirmation</div>
       </div>
@@ -82,25 +84,28 @@
   function renderTop(){
     $('avatar-initial').textContent=initials(state.name);$('name-pill').textContent=`Voting as ${state.name||'guest'}`;
     $('connection-label').textContent = !hasBackend?'Preview mode · votes on this device only':state.connection;
-    $('status-dot').classList.toggle('demo',!hasBackend||state.connection!=='Live votes connected');
-    $('top-disclaimer').textContent=hasBackend?'Everyone can see totals; only the organizer can see voter names.':'Demo: votes remain on this phone. Connect Supabase before sharing.';
-    $('participants-count').textContent=people();$('total-count').textContent=totalEventPicks();
+    $('status-dot').classList.toggle('demo',!hasBackend||state.connection!=='Private voting connected');
+    $('top-disclaimer').textContent=hasBackend?'Your picks are private; only the organizer sees combined results.':'Demo: picks remain on this phone. Results stay private.';
+    $('participants-count').textContent=summary().p;$('total-count').textContent=summary().b;
     const s=summary();$('bottom-title').textContent=`Your ${event().label.toLowerCase()} picks`;
     $('bottom-subtitle').textContent=`${s.p} chosen${s.b?' · '+s.b+' backup':''} · tap to review`;
-    $('meal-heading').innerHTML=`<div><div class="eyebrow">${esc(event().eyebrow)}</div><h2>${esc(event().label)}</h2><p>See how popular each dish is while you build your own shortlist.${state.event!=='breakfast'?' Non-veg: 2 starters + 1 backup, and 2 mains + 1 backup.':''}</p></div>`;
+    $('meal-heading').innerHTML=`<div><div class="eyebrow">${esc(event().eyebrow)}</div><h2>${esc(event().label)}</h2><p>${state.event==='breakfast'?'Browse the breakfast offerings included by the venue. Exact types and alternative preparations are to be confirmed.':'Choose your favorites independently—other guests’ selections are hidden. Non-veg: 2 starters + 1 backup, and 2 mains + 1 backup.'}</p>${state.event==='breakfast'?'':'<p class="included-meta">✓ Included: bottled water (200 ml). Soup comes with an assorted bread basket.</p>'}</div>`;
   }
   function renderViews(){
-    $('view-switch').innerHTML=[['browse','Explore menu'],['results','Live results'],['mine','My picks'], ...(state.organizer?[['organizer','Organizer']]:[])].map(([key,label])=>`<button data-action="view" data-id="${key}" class="${state.view===key?'active':''}" aria-pressed="${state.view===key}">${label}</button>`).join('');
+    $('view-switch').innerHTML=[['browse','Explore menu'],['mine','My picks'], ...(state.organizer?[['organizer','Organizer results']]:[])].map(([key,label])=>`<button data-action="view" data-id="${key}" class="${state.view===key?'active':''}" aria-pressed="${state.view===key}">${label}</button>`).join('');
     $('mobile-categories').style.display=state.view==='browse'?'':'none';
     $('quick-picks').style.display=state.view==='browse'?'':'none';
     $('desktop-categories').closest('.sidebar').style.display=state.view==='browse'?'':'none';
   }
   function normalizeVotes(){state.votes=state.votes.filter(v=>itemById[v.item_id] && eventById[v.event_id]);}
   function dishHTML(item){
-    const primaryCount=voteCount(item.id),backupCount=voteCount(item.id,'backup');
     const current=sameVote(item.id),isNV=isNonveg(item.category),selected=Boolean(current),rank=current?.rank;
     let controls='';
-    if(isNV){
+    if(item.category.startsWith('breakfast_')){
+      const choice=/\bor\b|choice/i.test(item.name);
+      const pending=/\btypes\b|Potato Preparation|Veg Sandwich/i.test(item.name);
+      controls='<span class="included-pill '+(choice||pending?'pending':'')+'">'+(choice?'Venue choice pending':pending?'Included · variety TBD':'Included')+'</span>';
+    }else if(isNV){
       const normalFull=myNonveg(item.category,'primary').length>=nonvegLimit(item.category,'primary'), backupFull=myNonveg(item.category,'backup').length>=nonvegLimit(item.category,'backup');
       controls = `<button class="pick-button ${rank==='primary'?'active':''}" data-action="vote" data-id="${item.id}" data-rank="primary" ${state.saving||(rank!=='primary' && normalFull)?'disabled':''} aria-label="${rank==='primary'?'Remove':'Choose'} ${esc(item.name)} as primary">${rank==='primary'?'✓ Picked':'Pick'}</button>`;
       if(rank!=='primary')controls += `<button class="pick-button backup-btn ${rank==='backup'?'active':''}" data-action="vote" data-id="${item.id}" data-rank="backup" ${state.saving||(rank!=='backup'&&backupFull)?'disabled':''} aria-label="${rank==='backup'?'Remove backup':'Add as backup'} ${esc(item.name)}">${rank==='backup'?'★ Backup':'☆ Backup'}</button>`;
@@ -108,8 +113,8 @@
       const cap=slotLimit(item.category);const limitReached=cap!==undefined && selectedInSection(item.category)>=cap;
       controls=`<button class="pick-button ${selected?'active':''}" data-action="vote" data-id="${item.id}" data-rank="primary" ${state.saving||(!selected&&limitReached)?'disabled':''} aria-label="${selected?'Remove':'Choose'} ${esc(item.name)}">${selected?'✓ Picked':cap===undefined?'♡ Interested':'+ Pick'}</button>`;
     }
-    const peopleText = primaryCount?`<b>${primaryCount} ${primaryCount===1?'vote':'votes'}</b> · anonymous`:'Be the first to pick this';
-    return `<article class="dish ${rank==='primary'?'selected':rank==='backup'?'backup':''}"><div class="dish-main"><div class="dish-title-row"><span class="dish-title">${esc(item.name)}</span>${rank==='primary'?'<span class="selected-mark">✓ Yours</span>':''}${rank==='backup'?'<span class="backup-mark">★ Your backup</span>':''}</div><div class="vote-detail">${peopleText}${backupCount?` · <span style="color:#9c713d">${backupCount} backup</span>`:''}</div></div><div class="dish-actions"><div class="count-chip" aria-label="${primaryCount} votes">${iconHeart}${primaryCount}</div>${controls}</div></article>`;
+    const statusText = item.category.startsWith('breakfast_')?'Provided as part of the breakfast offering':rank==='primary'?'✓ Your choice is saved':rank==='backup'?'★ Saved as your backup':'Choose what you would enjoy · results are private';
+    return `<article class="dish ${rank==='primary'?'selected':rank==='backup'?'backup':''}"><div class="dish-main"><div class="dish-title-row"><span class="dish-title">${esc(item.name)}</span>${rank==='primary'?'<span class="selected-mark">✓ Yours</span>':''}${rank==='backup'?'<span class="backup-mark">★ Your backup</span>':''}</div><div class="vote-detail">${statusText}</div></div><div class="dish-actions">${controls}</div></article>`;
   }
   function renderBrowse(){
     const s=section(), e=event(), limit=s.nonveg?nonvegLimit(state.section,'primary'):slotLimit(state.section);
@@ -123,24 +128,22 @@
     if(state.event==='gala' && state.section==='curd'){
       $('selection-content').innerHTML='<section class="content-card"><div class="section-heading"><div><h3>Curd / raita</h3><p>Included as part of the gala menu</p></div><span class="quota-pill complete">Included</span></div><div class="special">Dahi Mehfil is included by the venue. There is no separate choice to make for this section.</div></section>';return;
     }
+    if(state.event==='breakfast')notices+='<div class="banner"><div class="banner-symbol">✓</div><div><strong>Breakfast is included</strong><p>The items below are offerings listed in the breakfast PDF, not extra selections. Exact varieties and either/or preparations still need venue confirmation.</p></div></div>';
+    if(state.event!=='breakfast'&&state.section==='soups')notices+='<div class="special"><b>Included:</b> Assorted bread basket with soup (as specified by the venue).</div>';
     const found=sortItems((itemsBySection[state.section]||[]).filter(x=>x.name.toLowerCase().includes(state.search.trim().toLowerCase())));
     if(['achaar','papad','chutney'].includes(state.section)){
       $('selection-content').innerHTML=`<section class="content-card"><div class="section-heading"><div><h3>${esc(s.label)}</h3><p>The contracted menu allows ${limit} varieties, but the PDF doesn't name them.</p></div><span class="quota-pill">Venue confirmation needed</span></div><div class="special">No options are available for voting until the caterer confirms the actual varieties. These slots are not marked complete.</div></section>`;
       return;
     }
-    const quota=limit!==undefined?`<span class="quota-pill ${done?'complete':''}">${selected} of ${limit} selected</span>`:`<span class="quota-pill">Preferences only</span>`;
+    const quota=state.event==='breakfast'?'<span class="quota-pill complete">Included</span>':limit!==undefined?`<span class="quota-pill ${done?'complete':''}">${selected} of ${limit} selected</span>`:`<span class="quota-pill">Preferences only</span>`;
     $('selection-content').innerHTML=`${!hasBackend?'<div class="banner"><div class="banner-symbol">i</div><div><strong>Preview mode</strong><p>Your selections work on this phone. Live shared voting starts after Supabase is connected. Do not share this demo as a live poll yet.</p></div></div>':''}${notices}
-      <section class="content-card"><div class="section-heading"><div><h3>${esc(s.label)}</h3><p>${state.event==='breakfast'?'Venue-listed offerings; options to confirm':(itemsBySection[state.section]||[]).length+' choices from the venue menu bank'}</p></div>${quota}</div>
-      <div class="toolbar"><label class="searchbox"><span class="screenreader">Search ${esc(s.label)}</span><input id="dish-search" type="search" placeholder="Find a dish…" autocomplete="off" value="${esc(state.search)}" /></label><select id="dish-sort" class="sort-control" aria-label="Sort dishes"><option value="popular" ${state.sort==='popular'?'selected':''}>Most liked</option><option value="az" ${state.sort==='az'?'selected':''}>A–Z</option></select></div>
+      <section class="content-card"><div class="section-heading"><div><h3>${esc(s.label)}</h3><p>${state.event==='breakfast'?'Venue-listed breakfast offerings · no selections required':(itemsBySection[state.section]||[]).length+' choices from the venue menu bank'}</p></div>${quota}</div>
+      <div class="toolbar"><label class="searchbox"><span class="screenreader">Search ${esc(s.label)}</span><input id="dish-search" type="search" placeholder="Find a dish…" autocomplete="off" value="${esc(state.search)}" /></label><select id="dish-sort" class="sort-control" aria-label="Sort dishes"><option value="bank" ${state.sort==='bank'?'selected':''}>Menu order</option><option value="az" ${state.sort==='az'?'selected':''}>A–Z</option></select></div>
       <div class="dish-list" id="dish-list">${found.length?found.map(dishHTML).join(''):'<div class="no-results">No matching dishes. Try another search.</div>'}</div></section>`;
   }
   function renderResults(){
-    const hasVotes=menu.items.some(x=>event().sections.includes(x.category)&&voteCount(x.id)>0);
-    let candidates=menu.items.filter(x=>event().sections.includes(x.category)).map(i=>({...i,total:voteCount(i.id)})).filter(x=>x.total);
-    candidates.sort((a,b)=>b.total-a.total||a.name.localeCompare(b.name));
-    const max=Math.max(1,candidates[0]?.total||0);
-    const html=candidates.map((x,i)=>`<div class="leader-row"><div class="leader-rank">${i+1}</div><div class="leader-body"><strong>${esc(x.name)}</strong><p>${esc(menu.sections[x.category].label)} · Anonymous totals</p><div class="progress"><span style="width:${Math.round(x.total/max*100)}%"></span></div></div><div class="leader-votes">♡ ${x.total}</div></div>`).join('');
-    $('selection-content').innerHTML=`<section class="content-card all-results"><div class="section-heading"><div><h3>Most loved dishes</h3><p>Live leaderboard for ${esc(event().label)}</p></div><span class="quota-pill">${people()} people</span></div><p class="results-note">One primary vote per person per dish. Optional non-veg backups are shown on dish cards but not counted in this ranking.</p>${hasVotes?html:'<div class="no-results">No votes yet. Start with a dish you love!</div>'}</section>`;
+    // Legacy "results" navigation should never expose another guest's votes.
+    state.view='mine';renderMine();
   }
   function renderMine(){
     const grouped=event().sections.map(id=>({id,votes:ownVotes().filter(x=>x.section_id===id)})).filter(x=>x.votes.length);
@@ -149,18 +152,49 @@
   }
   function renderOrganizer(){
     if(!state.organizer){state.view='results';renderResults();return;}
-    const rows=currentVotes().filter(v=>itemById[v.item_id]).sort((a,b)=>a.user_name.localeCompare(b.user_name)||a.section_id.localeCompare(b.section_id));
-    const html=rows.map(v=>`<div class="mine-item"><span><b>${esc(v.user_name)}</b> · ${esc(itemById[v.item_id].name)} <small>(${esc(menu.sections[v.section_id].label)}, ${esc(v.rank)})</small></span></div>`).join('');
-    $('selection-content').innerHTML=`<section class="content-card"><div class="section-heading"><h3>Organizer view · private</h3><span class="quota-pill">${rows.length} records</span></div><p class="results-note">You are signed in as a verified organizer. Individual names never appear in guest leaderboards.</p>${html||'<div class="no-results">No votes yet.</div>'}<div style="padding-top:18px"><button class="secondary-button" data-action="reset-all">Reset ALL guests’ votes</button></div></section>`;
+    // Organizer reports must not depend on the currently selected browsing meal.
+    const all=state.votes.filter(v=>itemById[v.item_id]&&eventById[v.event_id]);
+    const current=state.organizerEvent||'all';
+    const people=new Set(all.map(v=>v.user_id));
+    const chips=[['all','All events'],...eventOrder.map(id=>[id,eventById[id].label])].map(([id,label])=>
+      '<button class="organizer-chip '+(current===id?'active':'')+'" data-action="organizer-event" data-id="'+id+'" aria-pressed="'+(current===id)+'">'+esc(label)+' <span>'+all.filter(v=>id==='all'||v.event_id===id).length+'</span></button>').join('');
+    const groups=eventOrder.filter(id=>current==='all'||id===current).map(id=>{
+      const rows=all.filter(v=>v.event_id===id);
+      if(!rows.length)return '';
+      const byPerson=new Map();
+      for(const v of rows){
+        if(!byPerson.has(v.user_id))byPerson.set(v.user_id,{name:v.user_name||'Unnamed',votes:[]});
+        byPerson.get(v.user_id).votes.push(v);
+      }
+      const html=[...byPerson.values()].sort((a,b)=>a.name.localeCompare(b.name)).map(person=>{
+        const picks=person.votes.sort((a,b)=>eventById[id].sections.indexOf(a.section_id)-eventById[id].sections.indexOf(b.section_id)||a.rank.localeCompare(b.rank)).map(v=>
+          '<div class="organizer-pick"><strong>'+esc(itemById[v.item_id].name)+'</strong><span>'+esc(menu.sections[v.section_id]?.label||v.section_id)+(v.rank==='backup'?' · ★ Backup':'')+'</span></div>').join('');
+        return '<div class="organizer-person"><div class="organizer-person-head"><span class="organizer-avatar">'+esc(initials(person.name))+'</span><strong>'+esc(person.name)+'</strong><small>'+person.votes.length+' picks</small></div>'+picks+'</div>';
+      }).join('');
+      return '<section class="organizer-event"><div class="organizer-event-heading"><h4>'+esc(eventById[id].label)+'</h4><span>'+byPerson.size+' voters · '+rows.length+' picks</span></div>'+html+'</section>';
+    }).join('');
+    const visible=all.filter(v=>current==='all'||v.event_id===current);
+    const tallyMap=new Map();
+    for(const v of visible){
+      const key=v.event_id+'|'+v.item_id;
+      if(!tallyMap.has(key))tallyMap.set(key,{event_id:v.event_id,item_id:v.item_id,primary:0,backup:0});
+      tallyMap.get(key)[v.rank]++;
+    }
+    const topDishes=[...tallyMap.values()].sort((a,b)=>b.primary-a.primary || b.backup-a.backup ||
+      itemById[a.item_id].name.localeCompare(itemById[b.item_id].name));
+    const tallyHtml=topDishes.length?'<section class="organizer-tally"><h4>Dish popularity · organizer only</h4><div class="organizer-tally-list">'+topDishes.map((x,i)=>
+      '<div class="organizer-tally-row"><span class="organizer-tally-rank">'+(i+1)+'</span><div class="organizer-tally-description"><strong>'+esc(itemById[x.item_id].name)+'</strong><small>'+esc(eventById[x.event_id].label)+' · '+esc(menu.sections[itemById[x.item_id].category].label)+'</small></div><span class="organizer-tally-count">'+x.primary+' pick'+(x.primary===1?'':'s')+(x.backup?' · '+x.backup+' backup':'')+'</span></div>').join('')+'</div></section>':'';
+    const currentCount=visible.length;
+    $('selection-content').innerHTML='<section class="content-card organizer-panel"><div class="section-heading"><div><h3>Everyone’s picks</h3><p>Private organizer view · all events</p></div><span class="quota-pill">'+all.length+' total</span></div><p class="results-note">Names and individual picks are only visible to authorized organizers. Guests cannot see totals or names.</p><div class="organizer-metrics"><div><strong>'+people.size+'</strong><span>Voters</span></div><div><strong>'+all.length+'</strong><span>Total picks</span></div><div><strong>'+all.filter(v=>v.rank==='backup').length+'</strong><span>Backups</span></div></div><nav class="organizer-filter" aria-label="Filter organizer results">'+chips+'</nav>'+tallyHtml+(currentCount?groups:'<div class="no-results">No votes for this event. Choose All events to view votes elsewhere.</div>')+'<div class="organizer-tools"><button class="secondary-button" data-action="organizer-refresh">↻ Refresh results</button><button class="secondary-button" data-action="reset-all">Reset ALL guests’ votes</button></div></section>';
   }
   function renderContent(){if(state.view==='browse')renderBrowse();else if(state.view==='results')renderResults();else if(state.view==='organizer')renderOrganizer();else renderMine();}
   function renderAll(){renderEventTabs();renderCategories();renderTop();renderViews();renderContent();}
   function renderWelcome(error=''){
-    $('welcome-root').innerHTML=state.ready?'':`<div class="welcome-overlay"><div class="welcome-card"><div class="welcome-ornament">❧</div><div class="eyebrow">You're invited to choose</div><h2>First, what should<br>we call you?</h2><p class="intro">Choose the food you'd love to eat. Other guests see totals, not your name or individual selections.</p><form id="name-form"><label for="voter-name">Your name</label><input id="voter-name" type="text" autocomplete="name" placeholder="e.g. Priya Sharma" maxlength="50" minlength="2" required value="${esc(state.name)}" /><div class="form-error" id="login-error">${esc(error)}</div><button type="submit" class="primary-button" id="join-button">Let's see the menu →</button></form><p class="privacy-note">Your name and individual picks are private to you and the verified organizer. Other guests see totals only.</p></div></div>`;
+    $('welcome-root').innerHTML=state.ready?'':`<div class="welcome-overlay"><div class="welcome-card"><div class="welcome-ornament">❧</div><div class="eyebrow">You're invited to choose</div><h2>First, what should<br>we call you?</h2><p class="intro">Choose the food you'd love to eat. Other guests cannot see your name, selections, or voting totals.</p><form id="name-form"><label for="voter-name">Your name</label><input id="voter-name" type="text" autocomplete="name" placeholder="e.g. Priya Sharma" maxlength="50" minlength="2" required value="${esc(state.name)}" /><div class="form-error" id="login-error">${esc(error)}</div><button type="submit" class="primary-button" id="join-button">Let's see the menu →</button></form><p class="privacy-note">Your name and individual picks are private to you and the verified organizer. Other guests cannot see your votes or the totals.</p></div></div>`;
     if(!state.ready){const input=$('voter-name');setTimeout(()=>input?.focus(),80)}
   }
   function renderProfile(){
-    $('modal-root').innerHTML=`<div class="backdrop-modal" data-action="dismiss"><div class="modal-body" role="dialog" aria-modal="true" aria-label="Change voter name"><h3>Your voting name</h3><p>Only you and the verified organizer can see your name attached to your votes. Change it anytime.</p><form id="edit-name-form"><input id="edit-name" maxlength="50" minlength="2" required value="${esc(state.name)}" /><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">Cancel</button><button class="primary-button" type="submit">Save name</button></div></form>${hasBackend?'<button class="secondary-button" style="margin-top:14px" data-action="organizer-login">Organizer sign in</button>':''}</div></div>`;
+    $('modal-root').innerHTML=`<div class="backdrop-modal" data-action="dismiss"><div class="modal-body" role="dialog" aria-modal="true" aria-label="Change voter name"><h3>Your voting name</h3><p>Only you and the verified organizer can see your named votes. Change your display name anytime.</p><form id="edit-name-form"><input id="edit-name" maxlength="50" minlength="2" required value="${esc(state.name)}" /><div class="modal-actions"><button class="secondary-button" type="button" data-action="close-modal">Cancel</button><button class="primary-button" type="submit">Save name</button></div></form>${hasBackend?'<button class="secondary-button" style="margin-top:14px" data-action="organizer-login">Organizer sign in</button>':''}</div></div>`;
     $('edit-name')?.focus();
   }
   async function initBackend(){
@@ -188,15 +222,18 @@
       all.push(...(data||[]));if((data||[]).length<1000)break;start+=1000;
     }
     state.votes=all;normalizeVotes();
-    const [totals,participants]=await Promise.all([state.db.rpc('vote_totals'),state.db.rpc('vote_participants')]);
-    if(totals.error)throw totals.error;if(participants.error)throw participants.error;
-    state.totals=totals.data||[];state.participants=participants.data||[];
+    // Guests must never request aggregate functions; backend independently restricts these to organizers.
+    if(state.organizer){
+      const [totals,participants]=await Promise.all([state.db.rpc('vote_totals'),state.db.rpc('vote_participants')]);
+      if(totals.error)throw totals.error;if(participants.error)throw participants.error;
+      state.totals=totals.data||[];state.participants=participants.data||[];
+    }else{state.totals=[];state.participants=[];}
   }
   function subscribe(){
     if(!hasBackend||state.channel)return;
-    // RLS deliberately hides other users' vote rows. Poll aggregate RPCs instead of
+    // RLS deliberately hides other users' vote rows. Poll only each guest’s private ballots; only organizers can fetch aggregates, rather than
     // subscribing to raw postgres_changes, which could disclose private records.
-    state.connection='Live votes connected';renderTop();
+    state.connection='Private voting connected';renderTop();
     state.channel=setInterval(async()=>{
       if(state.saving||!state.ready||document.hidden)return;
       try{await fetchVotes();renderAll();}catch(e){state.connection='Sync delayed';renderTop();}
@@ -205,15 +242,16 @@
   async function join(name){
     name=name.trim().replace(/\s+/g,' ');
     if(name.length<2||name.length>50)throw Error('Please enter a name between 2 and 50 characters.');
-    await initBackend();await refreshOrganizer();await fetchVotes();state.name=name;localStorage.setItem(keys.name,name);state.ready=true;renderWelcome();renderAll();subscribe();
+    await initBackend();await refreshOrganizer();await fetchVotes();state.name=name;localStorage.setItem(keys.name,name);state.ready=true;renderWelcome();renderAll();subscribe();document.dispatchEvent(new CustomEvent('rajbagh:joined',{detail:{name}}));
   }
   function isOverLimit(item,rank){
     if(isNonveg(item.category))return myNonveg(item.category,rank).length>=nonvegLimit(item.category,rank);
     const limit=slotLimit(item.category);return limit!==undefined&&selectedInSection(item.category)>=limit;
   }
   async function applyVote(itemId,rank){
+    if(state.event==='breakfast')return;
     if(state.saving||!state.ready)return;
-    const item=itemById[itemId];if(!item||!event().sections.includes(item.category))return;
+    const item=itemById[itemId];if(!item||!event().sections.includes(item.category)||['achaar','papad','chutney'].includes(item.category))return;
     const previous=sameVote(itemId);
     const remove=Boolean(previous&&previous.rank===rank);
     if(!remove && (!previous||previous.rank!==rank) && isOverLimit(item,rank)){
@@ -240,12 +278,12 @@
     name=name.trim().replace(/\s+/g,' ');if(name.length<2||name.length>50){toast('Enter a name between 2 and 50 characters.');return}
     if(hasBackend){const {error}=await state.db.from('votes').update({user_name:name}).eq('user_id',state.userId);if(error){toast('Could not update name: '+error.message);return}}
     state.votes=state.votes.map(x=>own(x)?{...x,user_name:name}:x);state.name=name;localStorage.setItem(keys.name,name);
-    if(!hasBackend)localStorage.setItem(keys.votes,JSON.stringify(state.votes));$('modal-root').innerHTML='';renderAll();toast('Your display name has been updated.');
+    if(!hasBackend)localStorage.setItem(keys.votes,JSON.stringify(state.votes));$('modal-root').innerHTML='';renderAll();toast('Your display name has been updated.');document.dispatchEvent(new CustomEvent('rajbagh:joined',{detail:{name}}));
   }
   async function share(){
     const url=location.protocol==='file:'?'':location.href.split('#')[0];if(!url){toast('Publish the site before sharing a link.');return}
     if(!hasBackend){toast('This is a preview. Set up Supabase before inviting others.');return}
-    try{if(navigator.share)await navigator.share({title:'Vote on our wedding menu',text:'Help us choose the menu — see everyone’s favorites!',url});else{await navigator.clipboard.writeText(url);toast('Voting link copied!')}}catch(e){if(e.name!=='AbortError')toast('Could not share. You can copy the browser URL.');}
+    try{if(navigator.share)await navigator.share({title:'Vote on our wedding menu',text:'Help us choose the wedding menu — your picks are private!',url});else{await navigator.clipboard.writeText(url);toast('Voting link copied!')}}catch(e){if(e.name!=='AbortError')toast('Could not share. You can copy the browser URL.');}
   }
   async function resetMyVotes(){
     if(!confirm('Reset all YOUR selections across every event? This cannot be undone. Other people’s votes will remain.'))return;
@@ -286,6 +324,8 @@
     const t=e.target.closest('[data-action]');if(!t)return;
     const action=t.dataset.action, id=t.dataset.id;
     if(action==='event'){state.event=id;state.section=id==='breakfast'?'breakfast_cold':'starters';state.search='';state.view='browse';renderAll();window.scrollTo({top:window.innerWidth<801?250:330,behavior:'smooth'})}
+    else if(action==='organizer-event'){state.organizerEvent=id;renderContent();}
+    else if(action==='organizer-refresh'){try{await fetchVotes();renderAll();toast('Results refreshed.')}catch(err){toast('Refresh failed: '+(err.message||err));}}
     else if(action==='section'){state.section=id;state.search='';renderCategories();renderContent();if(window.innerWidth<801)window.scrollTo({top:document.querySelector('.content-panel').getBoundingClientRect().top+scrollY-12,behavior:'smooth'});}
     else if(action==='view'){state.view=id;renderViews();renderContent()}
     else if(action==='mine'){state.view='mine';renderViews();renderContent();document.querySelector('.content-panel').scrollIntoView({behavior:'smooth',block:'start'})}
@@ -315,4 +355,53 @@
   }
   start();
 })();
-
+/* A private little welcome surprise for Shruti — no voting information used. */
+(() => {
+  'use strict';
+  const dismissedKey = 'rajbagh.bride.dismissed.v1';
+  const isBride = name => /(?:^|\s)shruti(?:\s|$)/i.test(String(name || '').trim().replace(/\s+/g, ' '));
+  const alreadyDismissed = () => {
+    try { return sessionStorage.getItem(dismissedKey) === 'yes'; }
+    catch (_) { return false; }
+  };
+  const root = document.createElement('div');
+  root.id = 'bride-root';
+  document.body.append(root);
+  let previousFocus;
+  function dismiss() {
+    root.replaceChildren();
+    try { sessionStorage.setItem(dismissedKey, 'yes'); } catch (_) {}
+    if (previousFocus?.isConnected) previousFocus.focus();
+  }
+  function show(name) {
+    if (!isBride(name) || alreadyDismissed() || root.firstChild) return;
+    previousFocus = document.activeElement;
+    const particles = Array.from({ length: 19 }, (_, i) => {
+      const left = 5 + (i * 37) % 90;
+      const delay = -((i * 11) % 27) / 10;
+      const duration = 3.2 + (i % 5) * .4;
+      const glyph = ['✦', '❀', '♥', '✧', '✿'][i % 5];
+      return '<span class="bride-petal" aria-hidden="true" style="--x:' + left + '%;--delay:' + delay + 's;--duration:' + duration + 's">' + glyph + '</span>';
+    }).join('');
+    root.innerHTML = '<div class="bride-backdrop" data-bride-dismiss>' +
+      '<div class="bride-surprise" role="dialog" aria-modal="true" aria-labelledby="bride-title" aria-describedby="bride-desc">' +
+        '<div class="bride-petals" aria-hidden="true">' + particles + '</div>' +
+        '<button type="button" class="bride-close" data-bride-dismiss aria-label="Dismiss special greeting">✕</button>' +
+        '<div class="bride-monogram" aria-hidden="true">S <span>♥</span> S</div>' +
+        '<div class="bride-eyebrow">A LITTLE SURPRISE, JUST FOR YOU</div>' +
+        '<h2 id="bride-title">Hi bride <span aria-label="wink">😉</span></h2>' +
+        '<p id="bride-desc">Shruti, the most important guest has entered the chat! ✨<br>The best thing on this menu? <em>Your happily ever after.</em></p>' +
+        '<div class="bride-sparkle-line" aria-hidden="true">✧ &nbsp; ❀ &nbsp; ✧</div>' +
+        '<button type="button" class="bride-continue" data-bride-dismiss>Okay, now feed me! ♡</button>' +
+      '</div></div>';
+    root.querySelector('.bride-continue')?.focus();
+  }
+  document.addEventListener('rajbagh:joined', e => show(e.detail?.name));
+  document.addEventListener('click', e => {
+    const button = e.target.closest('[data-bride-dismiss]');
+    if (button && root.contains(button) && (button === e.target || button.tagName === 'BUTTON')) dismiss();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && root.firstChild) { e.preventDefault(); dismiss(); }
+  });
+})();
