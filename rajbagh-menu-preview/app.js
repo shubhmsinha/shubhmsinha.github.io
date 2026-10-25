@@ -85,7 +85,7 @@
     $('avatar-initial').textContent=initials(state.name);$('name-pill').textContent=`Voting as ${state.name||'guest'}`;
     $('connection-label').textContent = !hasBackend?'Preview mode · votes on this device only':state.connection;
     $('status-dot').classList.toggle('demo',!hasBackend||state.connection!=='Private voting connected');
-    $('top-disclaimer').textContent=hasBackend?'Your selections are private and aren't shown to other guests.':'Demo: picks remain on this phone. Results stay private.';
+    $('top-disclaimer').textContent=hasBackend?"Your selections are private and aren\'t shown to other guests.":'Demo: picks remain on this phone. Results stay private.';
     const onBreakfast=state.event==='breakfast';
     document.querySelector('.metric-container').style.display=onBreakfast?'none':'';
     document.querySelector('.bottom-bar').style.display=onBreakfast?'none':'';
