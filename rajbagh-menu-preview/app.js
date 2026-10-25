@@ -122,6 +122,17 @@
     const statusText = item.category.startsWith('breakfast_')?'Provided as part of the breakfast offering':rank==='primary'?'✓ Your choice is saved':rank==='backup'?'★ Saved as your backup':'Choose what you would enjoy · results are private';
     return `<article class="dish ${rank==='primary'?'selected':rank==='backup'?'backup':''}"><div class="dish-main"><div class="dish-title-row"><span class="dish-title">${esc(item.name)}</span>${rank==='primary'?'<span class="selected-mark">✓ Yours</span>':''}${rank==='backup'?'<span class="backup-mark">★ Your backup</span>':''}</div><div class="vote-detail">${statusText}</div></div><div class="dish-actions">${controls}</div></article>`;
   }
+  function renderExtraWishPanel(){
+    if(state.event==='breakfast'||['achaar','papad','chutney'].includes(state.section)||(state.event==='gala'&&state.section==='curd'))return '';
+    const options=(itemsBySection[state.section]||[]).filter(d=>!ownVotes().some(v=>v.item_id===d.id));
+    const current=categoryWish(state.section);
+    if(!options.length&&!current)return '';
+    const optionsHtml=options.map(d=>`<option value="${esc(d.id)}" ${current?.item_id===d.id?'selected':''}>${esc(d.name)}</option>`).join('');
+    const selected=current?itemById[current.item_id]?.name||'Your extra dish':'';
+    return `<section class="extra-wish-panel"><div class="extra-wish-heading"><span class="extra-wish-icon">♡</span><div><h4>Wish we could add one more?</h4><p>Suggest one extra dish. This won't use a regular pick or guarantee it's served.</p></div></div>
+      ${current?`<div class="extra-wish-saved">✓ Extra suggestion: <strong>${esc(selected)}</strong><button type="button" data-action="extra-remove" data-id="${esc(state.section)}" ${state.saving?'disabled':''}>Remove</button></div>`:''}
+      ${options.length?`<div class="extra-wish-action"><label for="extra-wish-select">Optional extra</label><div class="extra-wish-fields"><select id="extra-wish-select" ${state.saving?'disabled':''}><option value="">Choose a dish…</option>${optionsHtml}</select><button class="secondary-button" type="button" data-action="extra-save" ${state.saving?'disabled':''}>${current?'Change suggestion':'Save extra suggestion'}</button></div></div>`:''}</section>`;
+  }
   function renderBrowse(){
     const s=section(), e=event(), limit=s.nonveg?nonvegLimit(state.section,'primary'):slotLimit(state.section);
     const selected=selectedInSection(state.section);
