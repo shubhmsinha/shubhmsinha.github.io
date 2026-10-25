@@ -14,7 +14,7 @@
   for (const item of menu.items) (itemsBySection[item.category] ||= []).push(item);
   const uid = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'guest-'+Date.now()+'-'+Math.random().toString(36).slice(2);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g,(m)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-  const state = { name:localStorage.getItem(keys.name)||'', userId:'', event:initialMeal, section:'breakfast_cold', view:'browse', search:'', sort:'bank', organizerEvent:'all', votes:[], totals:[], participants:[], organizer:false, db:null, channel:null, saving:false, active:false, connection:'', ready:false, modal:false };
+  const state = { name:localStorage.getItem(keys.name)||'', userId:'', event:initialMeal, section:'breakfast_cold', view:'browse', search:'', sort:'bank', organizerEvent:'all', votes:[], wishes:[], totals:[], participants:[], organizer:false, db:null, channel:null, saving:false, active:false, connection:'', ready:false, modal:false };
   let toastTimer;
   function toast(message){const x=$('toast');x.textContent=message;x.classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>x.classList.remove('visible'),3400);}
   function event(){return eventById[state.event];}
@@ -22,6 +22,8 @@
   function own(v){return v.user_id===state.userId;}
   function currentVotes(){return state.votes.filter(v=>v.event_id===state.event);}
   function ownVotes(){return currentVotes().filter(own);}
+  function ownWishes(){return state.wishes.filter(w=>w.user_id===state.userId && w.event_id===state.event);}
+  function categoryWish(sectionId){return ownWishes().find(w=>w.section_id===sectionId);}
   function sameVote(itemId){return ownVotes().find(x=>x.item_id===itemId);}
   function isNonveg(sectionId){return Boolean(menu.sections[sectionId]?.nonveg);}
   function slotLimit(sectionId){return event().limits[sectionId];}
@@ -101,7 +103,7 @@
     $('quick-picks').style.display=state.view==='browse'?'':'none';
     $('desktop-categories').closest('.sidebar').style.display=state.view==='browse'?'':'none';
   }
-  function normalizeVotes(){state.votes=state.votes.filter(v=>itemById[v.item_id] && eventById[v.event_id]);}
+  function normalizeVotes(){state.votes=state.votes.filter(v=>itemById[v.item_id] && eventById[v.event_id]);state.wishes=state.wishes.filter(w=>itemById[w.item_id] && eventById[w.event_id]);}
   function dishHTML(item){
     const current=sameVote(item.id),isNV=isNonveg(item.category),selected=Boolean(current),rank=current?.rank;
     let controls='';
@@ -219,14 +221,21 @@
     state.organizer=data===true;
   }
   async function fetchVotes(){
-    if(!hasBackend){state.votes=JSON.parse(localStorage.getItem(keys.votes)||'[]');normalizeVotes();return;}
+    if(!hasBackend){state.votes=JSON.parse(localStorage.getItem(keys.votes)||'[]');state.wishes=JSON.parse(localStorage.getItem('rajbagh.extraWishes.v1')||'[]');normalizeVotes();return;}
     let all=[],start=0;
     while(true){
       const {data,error}=await state.db.from('votes').select('user_id,user_name,event_id,section_id,item_id,rank,created_at').range(start,start+999);
       if(error)throw error;
       all.push(...(data||[]));if((data||[]).length<1000)break;start+=1000;
     }
-    state.votes=all;normalizeVotes();
+    state.votes=all;
+    let wishes=[],wishStart=0;
+    while(true){
+      const {data,error}=await state.db.from('extra_wishes').select('user_id,user_name,event_id,section_id,item_id,created_at').range(wishStart,wishStart+999);
+      if(error)throw error;
+      wishes.push(...(data||[]));if((data||[]).length<1000)break;wishStart+=1000;
+    }
+    state.wishes=wishes;normalizeVotes();
     // Guests must never request aggregate functions; backend independently restricts these to organizers.
     if(state.organizer){
       const [totals,participants]=await Promise.all([state.db.rpc('vote_totals'),state.db.rpc('vote_participants')]);
@@ -279,11 +288,39 @@
     }catch(e){state.votes=snapshot;toast('Could not save your vote: '+(e.message||e));}
     finally{state.saving=false;renderAll();}
   }
+  async function saveExtraWish(itemId){
+    if(!state.ready||state.saving||state.event==='breakfast')return;
+    const item=itemById[itemId];
+    if(!item||!event().sections.includes(item.category)||item.category!==state.section)return;
+    if(['achaar','papad','chutney'].includes(state.section)||(state.event==='gala'&&state.section==='curd'))return;
+    if(ownVotes().some(v=>v.item_id===itemId)){toast('This dish is already one of your main picks.');return;}
+    const old=[...state.wishes],row={user_id:state.userId,user_name:state.name,event_id:state.event,section_id:state.section,item_id:itemId};
+    state.saving=true;
+    state.wishes=state.wishes.filter(w=>!(own(w)&&w.event_id===state.event&&w.section_id===state.section));
+    state.wishes.push(row);renderAll();
+    try{
+      if(hasBackend){const {error}=await state.db.from('extra_wishes').upsert(row,{onConflict:'user_id,event_id,section_id'});if(error)throw error;await fetchVotes();}
+      else localStorage.setItem('rajbagh.extraWishes.v1',JSON.stringify(state.wishes));
+      toast('Extra suggestion saved! It does not change the menu limit.');
+    }catch(e){state.wishes=old;toast('Could not save suggestion: '+(e.message||e));}
+    finally{state.saving=false;renderAll();}
+  }
+  async function removeExtraWish(sectionId){
+    if(!state.ready||state.saving)return;
+    const old=[...state.wishes];state.saving=true;
+    state.wishes=state.wishes.filter(w=>!(own(w)&&w.event_id===state.event&&w.section_id===sectionId));renderAll();
+    try{
+      if(hasBackend){const {error}=await state.db.from('extra_wishes').delete().eq('user_id',state.userId).eq('event_id',state.event).eq('section_id',sectionId);if(error)throw error;await fetchVotes();}
+      else localStorage.setItem('rajbagh.extraWishes.v1',JSON.stringify(state.wishes));
+      toast('Extra suggestion removed.');
+    }catch(e){state.wishes=old;toast('Could not remove suggestion: '+(e.message||e));}
+    finally{state.saving=false;renderAll();}
+  }
   async function saveName(name){
     name=name.trim().replace(/\s+/g,' ');if(name.length<2||name.length>50){toast('Enter a name between 2 and 50 characters.');return}
-    if(hasBackend){const {error}=await state.db.from('votes').update({user_name:name}).eq('user_id',state.userId);if(error){toast('Could not update name: '+error.message);return}}
-    state.votes=state.votes.map(x=>own(x)?{...x,user_name:name}:x);state.name=name;localStorage.setItem(keys.name,name);
-    if(!hasBackend)localStorage.setItem(keys.votes,JSON.stringify(state.votes));$('modal-root').innerHTML='';renderAll();toast('Your display name has been updated.');document.dispatchEvent(new CustomEvent('rajbagh:joined',{detail:{name}}));
+    if(hasBackend){const {error}=await state.db.from('votes').update({user_name:name}).eq('user_id',state.userId);if(error){toast('Could not update name: '+error.message);return}const {error:wishError}=await state.db.from('extra_wishes').update({user_name:name}).eq('user_id',state.userId);if(wishError){toast('Could not update suggestion name: '+wishError.message);return}}
+    state.votes=state.votes.map(x=>own(x)?{...x,user_name:name}:x);state.wishes=state.wishes.map(x=>own(x)?{...x,user_name:name}:x);state.name=name;localStorage.setItem(keys.name,name);
+    if(!hasBackend){localStorage.setItem(keys.votes,JSON.stringify(state.votes));localStorage.setItem('rajbagh.extraWishes.v1',JSON.stringify(state.wishes));}$('modal-root').innerHTML='';renderAll();toast('Your display name has been updated.');document.dispatchEvent(new CustomEvent('rajbagh:joined',{detail:{name}}));
   }
   async function share(){
     const url=location.protocol==='file:'?'':location.href.split('#')[0];if(!url){toast('Publish the site before sharing a link.');return}
@@ -293,8 +330,8 @@
   async function resetMyVotes(){
     if(!confirm('Reset all YOUR selections across every event? This cannot be undone. Other people’s votes will remain.'))return;
     try{
-      if(hasBackend){const {error}=await state.db.from('votes').delete().eq('user_id',state.userId);if(error)throw error;await fetchVotes();}
-      else{state.votes=state.votes.filter(v=>!own(v));localStorage.setItem(keys.votes,JSON.stringify(state.votes));}
+      if(hasBackend){const {error}=await state.db.from('votes').delete().eq('user_id',state.userId);if(error)throw error;const {error:wishError}=await state.db.from('extra_wishes').delete().eq('user_id',state.userId);if(wishError)throw wishError;await fetchVotes();}
+      else{state.votes=state.votes.filter(v=>!own(v));state.wishes=state.wishes.filter(w=>!own(w));localStorage.setItem(keys.votes,JSON.stringify(state.votes));localStorage.setItem('rajbagh.extraWishes.v1',JSON.stringify(state.wishes));}
       state.event=initialMeal;state.section='breakfast_cold';state.view='browse';state.search='';renderAll();toast('Your picks have been reset.');
     }catch(e){toast('Reset failed: '+(e.message||e));}
   }
@@ -336,6 +373,8 @@
     else if(action==='mine'){state.view=state.event==='breakfast'?'browse':'mine';renderViews();renderContent();document.querySelector('.content-panel').scrollIntoView({behavior:'smooth',block:'start'})}
     else if(action==='vote'){await applyVote(id,t.dataset.rank)}
     else if(action==='remove'){const vote=sameVote(id);if(vote)await applyVote(id,vote.rank)}
+    else if(action==='extra-save'){const select=$('extra-wish-select');if(select?.value)await saveExtraWish(select.value);else toast('Please choose a dish to suggest.');}
+    else if(action==='extra-remove'){await removeExtraWish(state.section);}
     else if(action==='share')await share();
     else if(action==='profile')renderProfile();
     else if(action==='organizer-login')renderOrganizerLogin();
