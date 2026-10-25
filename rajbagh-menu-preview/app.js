@@ -73,8 +73,8 @@
   function renderCategories(){
     const e=event();
     const make=(mobile)=>e.sections.map(id=>{
-      const s=menu.sections[id];const count=selectedInSection(id);
-      const cap=id==='curd'&&state.event==='gala'?'Included':s.nonveg?`${count}/${nonvegLimit(id,'primary')}`:(e.limits[id]===undefined?'':`${count}/${e.limits[id]}`);
+      const s=menu.sections[id];const count=state.event==='breakfast'?0:selectedInSection(id);
+      const cap=(state.event==='breakfast'||(id==='curd'&&state.event==='gala'))?'Included':s.nonveg?`${count}/${nonvegLimit(id,'primary')}`:(e.limits[id]===undefined?'':`${count}/${e.limits[id]}`);
       return mobile?`<button class="section-chip ${state.section===id?'active':''}" data-action="section" data-id="${id}" aria-pressed="${state.section===id}">${esc(s.label)}${count?' · '+count:''}</button>`
       :`<button class="category-button ${state.section===id?'active':''}" data-action="section" data-id="${id}" aria-pressed="${state.section===id}"><strong>${esc(s.label)}</strong><em>${cap}</em></button>`;
     }).join('');
@@ -86,13 +86,17 @@
     $('connection-label').textContent = !hasBackend?'Preview mode · votes on this device only':state.connection;
     $('status-dot').classList.toggle('demo',!hasBackend||state.connection!=='Private voting connected');
     $('top-disclaimer').textContent=hasBackend?'Your picks are private; only the organizer sees combined results.':'Demo: picks remain on this phone. Results stay private.';
-    $('participants-count').textContent=summary().p;$('total-count').textContent=summary().b;
+    const onBreakfast=state.event==='breakfast';
+    document.querySelector('.metric-container').style.display=onBreakfast?'none':'';
+    document.querySelector('.bottom-bar').style.display=onBreakfast?'none':'';
+    if(onBreakfast)$('top-disclaimer').textContent='Breakfast is already included — no voting required.';
+    $('participants-count').textContent=onBreakfast?'0':summary().p;$('total-count').textContent=onBreakfast?'0':summary().b;
     const s=summary();$('bottom-title').textContent=`Your ${event().label.toLowerCase()} picks`;
     $('bottom-subtitle').textContent=`${s.p} chosen${s.b?' · '+s.b+' backup':''} · tap to review`;
     $('meal-heading').innerHTML=`<div><div class="eyebrow">${esc(event().eyebrow)}</div><h2>${esc(event().label)}</h2><p>${state.event==='breakfast'?'Browse the breakfast offerings included by the venue. Exact types and alternative preparations are to be confirmed.':'Choose your favorites independently—other guests’ selections are hidden. Non-veg: 2 starters + 1 backup, and 2 mains + 1 backup.'}</p>${state.event==='breakfast'?'':'<p class="included-meta">✓ Included: bottled water (200 ml). Soup comes with an assorted bread basket.</p>'}</div>`;
   }
   function renderViews(){
-    $('view-switch').innerHTML=[['browse','Explore menu'],['mine','My picks'], ...(state.organizer?[['organizer','Organizer results']]:[])].map(([key,label])=>`<button data-action="view" data-id="${key}" class="${state.view===key?'active':''}" aria-pressed="${state.view===key}">${label}</button>`).join('');
+    $('view-switch').innerHTML=[['browse',state.event==='breakfast'?'Included menu':'Explore menu'], ...(state.event==='breakfast'?[]:[['mine','My picks']]), ...(state.organizer?[['organizer','Organizer results']]:[])].map(([key,label])=>`<button data-action="view" data-id="${key}" class="${state.view===key?'active':''}" aria-pressed="${state.view===key}">${label}</button>`).join('');
     $('mobile-categories').style.display=state.view==='browse'?'':'none';
     $('quick-picks').style.display=state.view==='browse'?'':'none';
     $('desktop-categories').closest('.sidebar').style.display=state.view==='browse'?'':'none';
@@ -146,6 +150,7 @@
     state.view='mine';renderMine();
   }
   function renderMine(){
+    if(state.event==='breakfast'){state.view='browse';renderBrowse();return;}
     const grouped=event().sections.map(id=>({id,votes:ownVotes().filter(x=>x.section_id===id)})).filter(x=>x.votes.length);
     const html=grouped.map(g=>`<div class="mine-group"><h4>${esc(menu.sections[g.id].label)}</h4>${g.votes.map(v=>`<div class="mine-item"><span>${v.rank==='backup'?'★ ':''}${esc(itemById[v.item_id]?.name||v.item_id)}</span><button class="remove-link" data-action="remove" data-id="${esc(v.item_id)}" aria-label="Remove ${esc(itemById[v.item_id]?.name||'item')}">Remove</button></div>`).join('')}</div>`).join('');
     $('selection-content').innerHTML=`<section class="content-card mine-results"><div class="section-heading"><div><h3>Your menu shortlist</h3><p>Voting as ${esc(state.name)}</p></div><span class="quota-pill">${summary().p} choices</span></div><p class="results-note">You can revisit any category, remove a selection, or switch your optional backup.</p>${html||'<div class="no-results">Your shortlist is empty. Explore the menu to start picking.</div>'}<div style="padding-top:18px"><button class="secondary-button" data-action="view" data-id="browse">← Keep exploring</button> <button class="secondary-button" data-action="reset">Reset my picks</button></div></section>`;
@@ -327,8 +332,8 @@
     else if(action==='organizer-event'){state.organizerEvent=id;renderContent();}
     else if(action==='organizer-refresh'){try{await fetchVotes();renderAll();toast('Results refreshed.')}catch(err){toast('Refresh failed: '+(err.message||err));}}
     else if(action==='section'){state.section=id;state.search='';renderCategories();renderContent();if(window.innerWidth<801)window.scrollTo({top:document.querySelector('.content-panel').getBoundingClientRect().top+scrollY-12,behavior:'smooth'});}
-    else if(action==='view'){state.view=id;renderViews();renderContent()}
-    else if(action==='mine'){state.view='mine';renderViews();renderContent();document.querySelector('.content-panel').scrollIntoView({behavior:'smooth',block:'start'})}
+    else if(action==='view'){state.view=state.event==='breakfast'&&id==='mine'?'browse':id;renderViews();renderContent()}
+    else if(action==='mine'){state.view=state.event==='breakfast'?'browse':'mine';renderViews();renderContent();document.querySelector('.content-panel').scrollIntoView({behavior:'smooth',block:'start'})}
     else if(action==='vote'){await applyVote(id,t.dataset.rank)}
     else if(action==='remove'){const vote=sameVote(id);if(vote)await applyVote(id,vote.rank)}
     else if(action==='share')await share();
