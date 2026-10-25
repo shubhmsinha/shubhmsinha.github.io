@@ -156,7 +156,7 @@
     $('selection-content').innerHTML=`${!hasBackend?'<div class="banner"><div class="banner-symbol">i</div><div><strong>Preview mode</strong><p>Your selections work on this phone. Live shared voting starts after Supabase is connected. Do not share this demo as a live poll yet.</p></div></div>':''}${notices}
       <section class="content-card"><div class="section-heading"><div><h3>${esc(s.label)}</h3><p>${state.event==='breakfast'?'Venue-listed breakfast offerings · no selections required':(itemsBySection[state.section]||[]).length+' choices from the venue menu bank'}</p></div>${quota}</div>
       <div class="toolbar"><label class="searchbox"><span class="screenreader">Search ${esc(s.label)}</span><input id="dish-search" type="search" placeholder="Find a dish…" autocomplete="off" value="${esc(state.search)}" /></label><select id="dish-sort" class="sort-control" aria-label="Sort dishes"><option value="bank" ${state.sort==='bank'?'selected':''}>Menu order</option><option value="az" ${state.sort==='az'?'selected':''}>A–Z</option></select></div>
-      <div class="dish-list" id="dish-list">${found.length?found.map(dishHTML).join(''):'<div class="no-results">No matching dishes. Try another search.</div>'}</div></section>`;
+      <div class="dish-list" id="dish-list">${found.length?found.map(dishHTML).join(''):'<div class="no-results">No matching dishes. Try another search.</div>'}</div>${renderExtraWishPanel()}</section>`;
   }
   function renderResults(){
     // Legacy "results" navigation should never expose another guest's votes.
@@ -385,7 +385,7 @@
     else if(action==='vote'){await applyVote(id,t.dataset.rank)}
     else if(action==='remove'){const vote=sameVote(id);if(vote)await applyVote(id,vote.rank)}
     else if(action==='extra-save'){const select=$('extra-wish-select');if(select?.value)await saveExtraWish(select.value);else toast('Please choose a dish to suggest.');}
-    else if(action==='extra-remove'){await removeExtraWish(state.section);}
+    else if(action==='extra-remove'){await removeExtraWish(id||state.section);}
     else if(action==='share')await share();
     else if(action==='profile')renderProfile();
     else if(action==='organizer-login')renderOrganizerLogin();
