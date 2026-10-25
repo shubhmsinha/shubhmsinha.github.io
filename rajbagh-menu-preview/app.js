@@ -390,7 +390,7 @@
         '<div class="bride-monogram" aria-hidden="true">S <span>♥</span> S</div>' +
         '<div class="bride-eyebrow">A LITTLE SURPRISE, JUST FOR YOU</div>' +
         '<h2 id="bride-title">Hi bride <span aria-label="wink">😉</span></h2>' +
-        '<p id="bride-desc">Shruti, the most important guest has entered the chat! ✨<br>The best thing on this menu? <em>Your happily ever after.</em></p>' +
+        '<p id="bride-desc">Shruti, the most important guest has entered the chat! ✨</p>' +
         '<div class="bride-sparkle-line" aria-hidden="true">✧ &nbsp; ❀ &nbsp; ✧</div>' +
         '<button type="button" class="bride-continue" data-bride-dismiss>Okay, now feed me! ♡</button>' +
       '</div></div>';
