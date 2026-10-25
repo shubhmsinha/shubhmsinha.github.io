@@ -175,24 +175,31 @@
     if(!state.organizer){state.view='results';renderResults();return;}
     // Organizer reports must not depend on the currently selected browsing meal.
     const all=state.votes.filter(v=>itemById[v.item_id]&&eventById[v.event_id]);
+    const wishes=state.wishes.filter(w=>itemById[w.item_id]&&eventById[w.event_id]);
     const current=state.organizerEvent||'all';
-    const people=new Set(all.map(v=>v.user_id));
+    const people=new Set([...all,...wishes].map(v=>v.user_id));
     const chips=[['all','All events'],...eventOrder.map(id=>[id,eventById[id].label])].map(([id,label])=>
       '<button class="organizer-chip '+(current===id?'active':'')+'" data-action="organizer-event" data-id="'+id+'" aria-pressed="'+(current===id)+'">'+esc(label)+' <span>'+all.filter(v=>id==='all'||v.event_id===id).length+'</span></button>').join('');
     const groups=eventOrder.filter(id=>current==='all'||id===current).map(id=>{
       const rows=all.filter(v=>v.event_id===id);
-      if(!rows.length)return '';
+      const eventWishes=wishes.filter(w=>w.event_id===id);
+      if(!rows.length&&!eventWishes.length)return '';
       const byPerson=new Map();
       for(const v of rows){
-        if(!byPerson.has(v.user_id))byPerson.set(v.user_id,{name:v.user_name||'Unnamed',votes:[]});
+        if(!byPerson.has(v.user_id))byPerson.set(v.user_id,{name:v.user_name||'Unnamed',votes:[],wishes:[]});
         byPerson.get(v.user_id).votes.push(v);
+      }
+      for(const w of eventWishes){
+        if(!byPerson.has(w.user_id))byPerson.set(w.user_id,{name:w.user_name||'Unnamed',votes:[],wishes:[]});
+        byPerson.get(w.user_id).wishes.push(w);
       }
       const html=[...byPerson.values()].sort((a,b)=>a.name.localeCompare(b.name)).map(person=>{
         const picks=person.votes.sort((a,b)=>eventById[id].sections.indexOf(a.section_id)-eventById[id].sections.indexOf(b.section_id)||a.rank.localeCompare(b.rank)).map(v=>
           '<div class="organizer-pick"><strong>'+esc(itemById[v.item_id].name)+'</strong><span>'+esc(menu.sections[v.section_id]?.label||v.section_id)+(v.rank==='backup'?' · ★ Backup':'')+'</span></div>').join('');
-        return '<div class="organizer-person"><div class="organizer-person-head"><span class="organizer-avatar">'+esc(initials(person.name))+'</span><strong>'+esc(person.name)+'</strong><small>'+person.votes.length+' picks</small></div>'+picks+'</div>';
+        const extraPicks=person.wishes.map(w=>'<div class="organizer-pick organizer-extra"><strong>♡ '+esc(itemById[w.item_id].name)+'</strong><span>'+esc(menu.sections[w.section_id]?.label||w.section_id)+' · Extra suggestion</span></div>').join('');
+        return '<div class="organizer-person"><div class="organizer-person-head"><span class="organizer-avatar">'+esc(initials(person.name))+'</span><strong>'+esc(person.name)+'</strong><small>'+person.votes.length+' picks · '+person.wishes.length+' wishes</small></div>'+picks+extraPicks+'</div>';
       }).join('');
-      return '<section class="organizer-event"><div class="organizer-event-heading"><h4>'+esc(eventById[id].label)+'</h4><span>'+byPerson.size+' voters · '+rows.length+' picks</span></div>'+html+'</section>';
+      return '<section class="organizer-event"><div class="organizer-event-heading"><h4>'+esc(eventById[id].label)+'</h4><span>'+byPerson.size+' voters · '+rows.length+' picks · '+eventWishes.length+' wishes</span></div>'+html+'</section>';
     }).join('');
     const visible=all.filter(v=>current==='all'||v.event_id===current);
     const tallyMap=new Map();
@@ -205,8 +212,9 @@
       itemById[a.item_id].name.localeCompare(itemById[b.item_id].name));
     const tallyHtml=topDishes.length?'<section class="organizer-tally"><h4>Dish popularity · organizer only</h4><div class="organizer-tally-list">'+topDishes.map((x,i)=>
       '<div class="organizer-tally-row"><span class="organizer-tally-rank">'+(i+1)+'</span><div class="organizer-tally-description"><strong>'+esc(itemById[x.item_id].name)+'</strong><small>'+esc(eventById[x.event_id].label)+' · '+esc(menu.sections[itemById[x.item_id].category].label)+'</small></div><span class="organizer-tally-count">'+x.primary+' pick'+(x.primary===1?'':'s')+(x.backup?' · '+x.backup+' backup':'')+'</span></div>').join('')+'</div></section>':'';
-    const currentCount=visible.length;
-    $('selection-content').innerHTML='<section class="content-card organizer-panel"><div class="section-heading"><div><h3>Everyone’s picks</h3><p>Private organizer view · all events</p></div><span class="quota-pill">'+all.length+' total</span></div><p class="results-note">Names and individual picks are only visible to authorized organizers. Guests cannot see totals or names.</p><div class="organizer-metrics"><div><strong>'+people.size+'</strong><span>Voters</span></div><div><strong>'+all.length+'</strong><span>Total picks</span></div><div><strong>'+all.filter(v=>v.rank==='backup').length+'</strong><span>Backups</span></div></div><nav class="organizer-filter" aria-label="Filter organizer results">'+chips+'</nav>'+tallyHtml+(currentCount?groups:'<div class="no-results">No votes for this event. Choose All events to view votes elsewhere.</div>')+'<div class="organizer-tools"><button class="secondary-button" data-action="organizer-refresh">↻ Refresh results</button><button class="secondary-button" data-action="reset-all">Reset ALL guests’ votes</button></div></section>';
+    const visibleWishes=wishes.filter(w=>current==='all'||w.event_id===current);
+    const currentCount=visible.length+visibleWishes.length;
+    $('selection-content').innerHTML='<section class="content-card organizer-panel"><div class="section-heading"><div><h3>Everyone’s picks</h3><p>Private organizer view · all events</p></div><span class="quota-pill">'+all.length+' total</span></div><p class="results-note">Names and individual picks are only visible to authorized organizers. Guests cannot see totals or names.</p><div class="organizer-metrics"><div><strong>'+people.size+'</strong><span>Voters</span></div><div><strong>'+all.length+'</strong><span>Total picks</span></div><div><strong>'+all.filter(v=>v.rank==='backup').length+'</strong><span>Backups</span></div></div><nav class="organizer-filter" aria-label="Filter organizer results">'+chips+'</nav>'+tallyHtml+(currentCount?groups:'<div class="no-results">No picks or extra suggestions for this event yet.</div>')+'<div class="organizer-tools"><button class="secondary-button" data-action="organizer-refresh">↻ Refresh results</button><button class="secondary-button" data-action="reset-all">Reset ALL guests’ votes</button></div></section>';
   }
   function renderContent(){if(state.view==='browse')renderBrowse();else if(state.view==='results')renderResults();else if(state.view==='organizer')renderOrganizer();else renderMine();}
   function renderAll(){renderEventTabs();renderCategories();renderTop();renderViews();renderContent();}
